@@ -128,7 +128,6 @@ const autocomplete = async (event) => {
         console.log("sending request to bg script...");
         const response = await chrome.runtime.sendMessage({ //send message to background
             type: 'GET_COMPLETION',
-            textarea: activeTextArea,
             text: currentText
         });
         
@@ -145,12 +144,8 @@ const autocomplete = async (event) => {
             activeOverlay.textContent = '';
             return;
         }
-        //if textarea doesnt match current active
-        if (!(response.completion.textarea === activeTextArea)){
-            return;
-        }
         
-        const suggestionText = response.completion.result;
+        const suggestionText = response.completion;
         if (suggestionText){
             activeOverlay.textContent = currentText + suggestionText;
             console.log("Autocomplete suggestion: ", suggestionText);
@@ -184,7 +179,7 @@ const debounce = (callback, wait) => {
 }
 
 //debounced autocomplete
-const handleStopType = debounce(autocomplete, 2500);
+const handleStopType = debounce(autocomplete, 1500);
 
 
 //mutation observer for dynamic textareas
@@ -217,8 +212,6 @@ const textareas = document.querySelectorAll('textarea');
 
 let activeOverlay = null;
 let activeTextArea = null;
-
-const resizeObserverMap = new WeakMap();
 
 //setup all textareas 
 textareas.forEach(setupTextArea);
