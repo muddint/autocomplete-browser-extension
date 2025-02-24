@@ -179,7 +179,7 @@ const debounce = (callback, wait) => {
 }
 
 //debounced autocomplete
-const handleStopType = debounce(autocomplete, 1500);
+const handleStopType = debounce(autocomplete, 3000);
 
 
 //mutation observer for dynamic textareas
