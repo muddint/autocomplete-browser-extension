@@ -64,21 +64,24 @@ Ensure all responses are fluid, natural, and concise.`
 }
 
 //sends prompt to Nano for autocomplete
-async function handleCompletion(text){
+async function handleCompletion(text, textarea){
     const currentSession = await initSession();
     if (!currentSession){
         console.error("Failed to initialize session");
     }
     const result = await currentSession.prompt(text);
     console.log("Completion result: ");
-    return result;
+    return {
+        result: result,
+        textarea: textarea
+    };
 }
 
 //listen for messages sent from extension
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log("Received message: ", message);
     if (message.type === 'GET_COMPLETION'){
-        handleCompletion(message.text)
+        handleCompletion(message.text, message.textarea)
             .then(completion => sendResponse({completion}))
             .catch(error => sendResponse({error: error.message}));
         return true;

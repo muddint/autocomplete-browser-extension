@@ -26,138 +26,161 @@ const createOverlay = (textarea) => {
 }
 
 //update styling of overlay to match textarea
-const updateOverlay = (textarea, overlay) => {
+const updateOverlay = () => {
+    if (!activeTextArea || !activeOverlay){
+        return;
+    }
     //get current style of textarea
-    const computedStyle = window.getComputedStyle(textarea);
-    overlay.style.width = computedStyle.width;
-    overlay.style.height = computedStyle.height;
-    overlay.style.font = computedStyle.font;
-    overlay.style.padding = computedStyle.padding;
-    overlay.style.border = computedStyle.border;
-    overlay.style.boxSizing = computedStyle.boxSizing;
+    const computedStyle = window.getComputedStyle(activeTextArea);
+    activeOverlay.style.width = computedStyle.width;
+    activeOverlay.style.height = computedStyle.height;
+    activeOverlay.style.font = computedStyle.font;
+    activeOverlay.style.padding = computedStyle.padding;
+    activeOverlay.style.border = computedStyle.border;
+    activeOverlay.style.boxSizing = computedStyle.boxSizing;
 
     //positioning
-    const rect = textarea.getBoundingClientRect();
-    overlay.style.top = `${rect.top + window.scrollY}px`;
-    overlay.style.left = `${rect.left + window.scrollX}px`;
-}
-
-
-//update all overlay positions when necessary
-const updateAllOverlays = () => {
-    textareas.forEach((textarea) => {
-        const overlay = overlayMap.get(textarea);
-        updateOverlay(textarea, overlay);
-    })
+    const rect = activeTextArea.getBoundingClientRect();
+    activeOverlay.style.top = `${rect.top + window.scrollY}px`;
+    activeOverlay.style.left = `${rect.left + window.scrollX}px`;
 }
 
 //check for tab to accept
 const handleKeydown = (event) => {
-    const textarea = event.target;
-    const overlay = overlayMap.get(textarea);
-
-    if (overlay.textContent === ''){
+    if (!activeOverlay || activeOverlay.textContent === ''){
         return;
     }
     if (event.key === 'Tab'){ //accept suggestion
         event.preventDefault();
-        textarea.value = overlay.textContent;
+        activeTextArea.value = activeOverlay.textContent;
     }
     //clear suggestion if anything else or after accepting
-    overlay.textContent = '';
+    activeOverlay.textContent = '';
 }
 
 //clear when input area out of focus
 const handleBlur = (event) => {
-    const textarea = event.target;
-    const overlay = overlayMap.get(textarea);
-    overlay.textContent = '';
+    if (activeOverlay) {
+        activeOverlay.remove();
+        activeOverlay = null;
+        activeTextArea = null;
+    }
+    handleStopType.cancel();
 }
 
-const setupTextarea = (textarea) => {
-    //overlay setup
-    const overlay = createOverlay(textarea); //make overlay 
-    overlayMap.set(textarea, overlay);  //link to text area
-    updateOverlay(textarea, overlay);   //update overlay position
+const handleFocus = (event) => {
+    const textarea = event.target;
+    if (activeOverlay) { //cleanup if another overlay exists
+        activeOverlay.remove();
+        activeOverlay = null;
+        activeTextArea = null;
+    }
+    //set active text area and make overlay
+    activeOverlay = document.createElement('div');
+    activeOverlay.className = 'suggestion-overlay';
+    document.body.appendChild(activeOverlay);
+    activeTextArea = textarea;
+    //update positioning and styling
+    updateOverlay(textarea);
+}
 
-    //resize observer setup
-    const resizeObserver = new ResizeObserver(updateAllOverlays);
-    resizeObserver.observe(textarea);
-    resizeObserverMap.set(textarea, resizeObserver);
+const resizeObserver = new ResizeObserver((entries) => {
+    for (const entry of entries){
+        if (entry.target === activeTextArea && activeOverlay){
+            updateOverlay();
+        }
+    }
+});
+
+
+const setupTextArea = (textarea) => {
 
     //event listeners
     textarea.addEventListener('input', handleStopType); //add listener to handle typing
     textarea.addEventListener('keydown', handleKeydown); //tab accept
     textarea.addEventListener('blur', handleBlur); //clear when out of focus
+    textarea.addEventListener('focus', handleFocus); //add overlay when in focus
+
+    resizeObserver.observe(textarea);
 }
 
+
 //handle deletion
-const cleanupTextarea = (textarea) => {
-    const overlay = overlayMap.get(textarea);
-    const resizeObserver = resizeObserverMap.get(textarea);
-    if (overlay) {
-        overlay.remove();
-        overlayMap.delete(textarea);
-    }
-    if (resizeObserver){
-        resizeObserver.disconnect();
-        resizeObserverMap.delete(textarea);
+const cleanupTextArea = (textarea) => {
+    resizeObserver.unobserve(textarea);
+    if (textarea === activeTextArea && activeOverlay) {
+        activeOverlay.remove();
+        activeOverlay = null;
+        activeTextArea = null;
     }
 }
 
 //communicates with background services to autocomplete
 const autocomplete = async (event) => {
-    const textarea = event.target;
-    const currentText = textarea.value;
-    const overlay = overlayMap.get(textarea);
+    if (!activeTextArea || !activeOverlay){
+        return;
+    }
+
+    const currentText = activeTextArea.value;
     console.log("Current text: ", currentText);  
 
     try {
         console.log("sending request to bg script...");
         const response = await chrome.runtime.sendMessage({ //send message to background
             type: 'GET_COMPLETION',
+            textarea: activeTextArea,
             text: currentText
         });
-
+        
         console.log("received response:", response);
 
         if (!response) {
             console.error("No response received from background script");
-            overlay.textContent = '';
+            activeOverlay.textContent = '';
             return;
         }
 
         if (response.error){
             console.error("Error getting completion: ", response.error);
-            overlay.textContent = '';
+            activeOverlay.textContent = '';
             return;
         }
-
-        const suggestionText = response.completion;
+        //if textarea doesnt match current active
+        if (!(response.completion.textarea === activeTextArea)){
+            return;
+        }
+        
+        const suggestionText = response.completion.result;
         if (suggestionText){
-            overlay.textContent = currentText + suggestionText;
+            activeOverlay.textContent = currentText + suggestionText;
             console.log("Autocomplete suggestion: ", suggestionText);
             console.log("Combined text: ", currentText + suggestionText);
         } else {
             console.error("No completion received in response");
-            overlay.textContent = '';
+            activeOverlay.textContent = '';
         }
 
     } catch (error) {
         console.log("Error getting autocomplete suggestion: ", error);
-        overlay.textContent = '';
+        activeOverlay.textContent = '';
     }
 }
 
 //debouncer function
 const debounce = (callback, wait) => {
     let timeoutID = null;
-    return (...args) => {
+    const debouncer = (...args) => {
         window.clearTimeout(timeoutID);
         timeoutID = window.setTimeout(() => {
             callback(...args);
         }, wait);
     }
+    //add cancellability
+    debouncer.cancel = () => {
+        window.clearTimeout(timeoutID);
+        timeoutID = null;
+    }
+    return debouncer;
 }
 
 //debounced autocomplete
@@ -169,16 +192,16 @@ const mutationObserver = new MutationObserver((mutations) => {
     mutations.forEach(mutation => {
         mutation.removedNodes.forEach((node) => {
             if (node.nodeName === 'TEXTAREA'){ 
-                cleanupTextarea(node);  
+                cleanupTextArea(node);  
             } else if (node.querySelectorAll){ //if node can have elements
-                node.querySelectorAll('textarea').forEach(cleanupTextarea); //cleanup for all textarea elements
+                node.querySelectorAll('textarea').forEach(cleanupTextArea); //cleanup for all textarea elements
             }
         });
         mutation.addedNodes.forEach((node) => {
             if (node.nodeName === 'TEXTAREA'){
-                setupTextarea(node); 
+                setupTextArea(node); 
             } else if (node.querySelectorAll){ //if node can have elements
-                node.querySelectorAll('textarea').forEach(setupTextarea); //setup for all textarea elements
+                node.querySelectorAll('textarea').forEach(setupTextArea); //setup for all textarea elements
             }
         })
     })
@@ -191,12 +214,15 @@ mutationObserver.observe(document.body, {
 
 //add autocomplete to all textareas
 const textareas = document.querySelectorAll('textarea');
-const overlayMap = new WeakMap();
+
+let activeOverlay = null;
+let activeTextArea = null;
+
 const resizeObserverMap = new WeakMap();
 
 //setup all textareas 
-textareas.forEach(setupTextarea);
+textareas.forEach(setupTextArea);
 
-window.addEventListener('scroll', updateAllOverlays); //scrolling
-window.addEventListener('resize', updateAllOverlays); //resizing
-window.visualViewport.addEventListener('scroll', updateAllOverlays); //zooming
+window.addEventListener('scroll', updateOverlay); //scrolling
+window.addEventListener('resize', updateOverlay); //resizing
+window.visualViewport.addEventListener('scroll', updateOverlay); //zooming
