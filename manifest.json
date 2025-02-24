@@ -6,10 +6,16 @@
     "content_scripts": [
         {
             "matches": ["<all_urls>"],
-            "js": ["content.js"]
+            "js": ["content.js"],
+            "run_at": "document_end"
         }
     ],
+    "background": {
+        "service_worker": "background.js",
+        "type": "module"
+    },
     "permissions": ["aiLanguageModelOriginTrial"],
+    "minimum_chrome_version": "131",
     "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlrkL96+EvNP2gT6cn9PmROrYIAgxKrkkEJWHNHjZdBCZaFeX1/JshxilNP2K7MYC7pDBvCmZiSN0syTXc1jGUtl1F21tHKt/az4Gi+6fbf1WvPehcwF0gtZeJiz6yrypFo24ZDs7Iv1s67TvEKtksHSJ+0+tzeE2sA2+ykeJQ0Vg9GfDDgWiMy+MEO2efpBr/OLFRycw8GLamMP/tpcLTJ+VX/90J9Rkse28rOpjFkIhgIubKPKLgkaqgX00GYSSCWrOC1vtaJ1XNJIfykshJr0Vv0/R6oMcSoi0s9Sbkrir0dJNUcjHfX0xIJE5dQ33xjSNWT1m9e43OqXiAg1OZQIDAQAB",
     "trial_tokens": ["AtzNNMMU70PLfimT/j7qD5WCE6/4BWBtWfeO6r3+I70xT5FJL14wYs2rVjgmHV/K72FNcmuThVqZn4M1r+g8+QIAAAB4eyJvcmlnaW4iOiJjaHJvbWUtZXh0ZW5zaW9uOi8vYmVnZmFjZHBoY29ibGFjZWpubWhjam5iaWJqZmNkZGwiLCJmZWF0dXJlIjoiQUlQcm9tcHRBUElGb3JFeHRlbnNpb24iLCJleHBpcnkiOjE3NjA0ODYzOTl9"]
   }
