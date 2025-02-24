@@ -74,6 +74,37 @@ const handleBlur = (event) => {
     overlay.textContent = '';
 }
 
+const setupTextarea = (textarea) => {
+    //overlay setup
+    const overlay = createOverlay(textarea); //make overlay 
+    overlayMap.set(textarea, overlay);  //link to text area
+    updateOverlay(textarea, overlay);   //update overlay position
+
+    //resize observer setup
+    const resizeObserver = new ResizeObserver(updateAllOverlays);
+    resizeObserver.observe(textarea);
+    resizeObserverMap.set(textarea, resizeObserver);
+
+    //event listeners
+    textarea.addEventListener('input', handleStopType); //add listener to handle typing
+    textarea.addEventListener('keydown', handleKeydown); //tab accept
+    textarea.addEventListener('blur', handleBlur); //clear when out of focus
+}
+
+//handle deletion
+const cleanupTextarea = (textarea) => {
+    const overlay = overlayMap.get(textarea);
+    const resizeObserver = resizeObserverMap.get(textarea);
+    if (overlay) {
+        overlay.remove();
+        overlayMap.delete(textarea);
+    }
+    if (resizeObserver){
+        resizeObserver.disconnect();
+        resizeObserverMap.delete(textarea);
+    }
+}
+
 //communicates with background services to autocomplete
 const autocomplete = async (event) => {
     const textarea = event.target;
@@ -132,21 +163,39 @@ const debounce = (callback, wait) => {
 //debounced autocomplete
 const handleStopType = debounce(autocomplete, 2500);
 
+
+//mutation observer for dynamic textareas
+const mutationObserver = new MutationObserver((mutations) => {
+    mutations.forEach(mutation => {
+        mutation.removedNodes.forEach((node) => {
+            if (node.nodeName === 'TEXTAREA'){ 
+                cleanupTextarea(node);  
+            } else if (node.querySelectorAll){ //if node can have elements
+                node.querySelectorAll('textarea').forEach(cleanupTextarea); //cleanup for all textarea elements
+            }
+        });
+        mutation.addedNodes.forEach((node) => {
+            if (node.nodeName === 'TEXTAREA'){
+                setupTextarea(node); 
+            } else if (node.querySelectorAll){ //if node can have elements
+                node.querySelectorAll('textarea').forEach(setupTextarea); //setup for all textarea elements
+            }
+        })
+    })
+});
+
+mutationObserver.observe(document.body, {
+    childList: true,
+    subtree: true
+});
+
 //add autocomplete to all textareas
 const textareas = document.querySelectorAll('textarea');
-const overlayMap = new Map();
+const overlayMap = new WeakMap();
+const resizeObserverMap = new WeakMap();
 
-textareas.forEach((textarea) => {
-    const overlay = createOverlay(textarea); //make overlay 
-    overlayMap.set(textarea, overlay);  //link to text area
-    updateOverlay(textarea, overlay);   //update overlay position
-    textarea.addEventListener('input', handleStopType); //add listener to handle typing
-    textarea.addEventListener('keydown', handleKeydown); //tab accept
-    textarea.addEventListener('blur', handleBlur); //clear when out of focus
-    //resize when specific input area resized
-    const resizeObserver = new ResizeObserver(updateAllOverlays);
-    resizeObserver.observe(textarea);
-})
+//setup all textareas 
+textareas.forEach(setupTextarea);
 
 window.addEventListener('scroll', updateAllOverlays); //scrolling
 window.addEventListener('resize', updateAllOverlays); //resizing
