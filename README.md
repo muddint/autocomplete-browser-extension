@@ -12,7 +12,7 @@ A chrome extension to autocomplete your text with the locally run Gemini Nano.
     2. Ensure Chrome version is between Chrome 131 to 136 (inclusive).
     3. Enable required Chrome experiments at [`chrome://flags`](chrome://flags):
         - Set [`Enables optimization guide on device`](chrome://flags/#optimization-guide-on-device-model) to `Enabled BypassPerfRequirements`
-        - Set [`Prompt API for Gemini Nano`](prompt-api-for-gemini-nano) to `Enabled`
+        - Set [`Prompt API for Gemini Nano`](chrome://flags/#prompt-api-for-gemini-nano) to `Enabled`
         - You will need to relaunch Chrome for these to take effect and to continue
     4. Make sure Gemini Nano is downloaded at [`chrome://components`](chrome://components):
         - Find Optimization Guide On Device Model
