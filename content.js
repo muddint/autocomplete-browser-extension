@@ -51,6 +51,29 @@ const updateAllOverlays = () => {
     })
 }
 
+//check for tab to accept
+const handleKeydown = (event) => {
+    const textarea = event.target;
+    const overlay = overlayMap.get(textarea);
+
+    if (overlay.textContent === ''){
+        return;
+    }
+    if (event.key === 'Tab'){ //accept suggestion
+        event.preventDefault();
+        textarea.value = overlay.textContent;
+    }
+    //clear suggestion if anything else or after accepting
+    overlay.textContent = '';
+}
+
+//clear when input area out of focus
+const handleBlur = (event) => {
+    const textarea = event.target;
+    const overlay = overlayMap.get(textarea);
+    overlay.textContent = '';
+}
+
 //communicates with background services to autocomplete
 const autocomplete = async (event) => {
     const textarea = event.target;
@@ -118,6 +141,11 @@ textareas.forEach((textarea) => {
     overlayMap.set(textarea, overlay);  //link to text area
     updateOverlay(textarea, overlay);   //update overlay position
     textarea.addEventListener('input', handleStopType); //add listener to handle typing
+    textarea.addEventListener('keydown', handleKeydown); //tab accept
+    textarea.addEventListener('blur', handleBlur); //clear when out of focus
+    //resize when specific input area resized
+    const resizeObserver = new ResizeObserver(updateAllOverlays);
+    resizeObserver.observe(textarea);
 })
 
 window.addEventListener('scroll', updateAllOverlays); //scrolling
