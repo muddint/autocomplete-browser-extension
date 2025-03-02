@@ -14,33 +14,103 @@ style.textContent = `
     overflow: hidden;
     white-space: pre-wrap;
     word-wrap: break-word;
+    z-index: 10000;
 }`;
 document.head.appendChild(style);
 
+let activeOverlay = null;
+let activeInput = null;
+
+//check if element is text input field
+
+const isInputField = (element) => {
+    if (element.nodeName === 'TEXTAREA') { // if text area
+        return true;
+    } 
+    if (element.nodeName === 'INPUT' &&   // if input type text or search (if none, default is type)
+        (element.type === 'text' ||
+         element.type === 'search' ||
+         !element.hasAttribute('type')
+        ) 
+    ) {
+        return true;
+    }
+    if (element.getAttribute && element.getAttribute('contenteditable') === 'true') { // if editable div
+        return true;
+    }
+    return false;
+}
+
+//getter for various input elements
+const getInputText = (element) => {
+    if (element.nodeName === 'TEXTAREA' || element.nodeName === 'INPUT'){
+        console.log('field is textarea or input')
+        return element.value;
+    } else if (element.getAttribute && element.getAttribute('contenteditable') === 'true'){
+        console.log('field is editable div')
+        return element.textContent;
+    }
+    console.log('could not get text input')
+    return '';
+}
+
+//setter for various input elements
+const setInputText = (element, text) => {
+    if (element.nodeName === 'TEXTAREA' || element.nodeName === 'INPUT'){
+        element.value = text;
+    } else if (element.getAttribute && element.getAttribute('contenteditable') === 'true'){
+        element.textContent = text;
+        //send input event to site
+        const event = new Event('input', {
+            bubbles: true,
+            cancelable: true,
+        });
+        element.dispatchEvent(event);
+    }
+}
+
 //create overlay element to show suggestion next to text
-const createOverlay = (textarea) => { 
+const createOverlay = () => { 
     const overlay = document.createElement('div');
     overlay.className = 'suggestion-overlay';  
     document.body.appendChild(overlay);
     return overlay;
 }
 
-//update styling of overlay to match textarea
+//update styling of overlay to match text input
 const updateOverlay = () => {
-    if (!activeTextArea || !activeOverlay){
+    if (!activeInput || !activeOverlay){
         return;
     }
     //get current style of textarea
-    const computedStyle = window.getComputedStyle(activeTextArea);
-    activeOverlay.style.width = computedStyle.width;
-    activeOverlay.style.height = computedStyle.height;
-    activeOverlay.style.font = computedStyle.font;
-    activeOverlay.style.padding = computedStyle.padding;
-    activeOverlay.style.border = computedStyle.border;
-    activeOverlay.style.boxSizing = computedStyle.boxSizing;
+    const computedStyle = window.getComputedStyle(activeInput);
 
+    //font styling
+    activeOverlay.style.font = computedStyle.font;
+    activeOverlay.style.fontSize = computedStyle.fontSize;
+    activeOverlay.style.fontFamily = computedStyle.fontFamily;
+    activeOverlay.style.lineHeight = computedStyle.lineHeight;
+    activeOverlay.style.letterSpacing = computedStyle.letterSpacing;
+    
+    if (activeInput.nodeName === 'TEXT' || activeInput.nodeName === 'INPUT') { //textarea and input
+        activeOverlay.style.width = computedStyle.width;
+        activeOverlay.style.height = computedStyle.height;
+        activeOverlay.style.padding = computedStyle.padding;
+        activeOverlay.style.border = computedStyle.border;
+        activeOverlay.style.boxSizing = computedStyle.boxSizing;
+    } else if (activeInput.getAttribute && activeInput.getAttribute('contenteditable') === 'true') { //editable div
+        activeOverlay.style.width = `${activeInput.offsetWidth}px`;
+        activeOverlay.style.height = `${activeInput.offsetHeight}px`;
+        //add padding if missing
+        if (computedStyle.padding === '0px'){
+            activeOverlay.style.padding = '4px';
+        } else {
+            activeOverlay.style.padding = computedStyle.padding;
+        }
+    }
+    
     //positioning
-    const rect = activeTextArea.getBoundingClientRect();
+    const rect = activeInput.getBoundingClientRect();
     activeOverlay.style.top = `${rect.top + window.scrollY}px`;
     activeOverlay.style.left = `${rect.left + window.scrollX}px`;
 }
@@ -52,7 +122,8 @@ const handleKeydown = (event) => {
     }
     if (event.key === 'Tab'){ //accept suggestion
         event.preventDefault();
-        activeTextArea.value = activeOverlay.textContent;
+        setInputText(activeInput, activeOverlay.textContent);
+        activeInput.value = activeOverlay.textContent;
     }
     //clear suggestion if anything else or after accepting
     activeOverlay.textContent = '';
@@ -63,65 +134,86 @@ const handleBlur = (event) => {
     if (activeOverlay) {
         activeOverlay.remove();
         activeOverlay = null;
-        activeTextArea = null;
+        activeInput = null;
     }
     handleStopType.cancel();
 }
 
 const handleFocus = (event) => {
-    const textarea = event.target;
+    const textInput = event.target;
+    // if not text, stop
+    if (! isInputField(textInput)){
+        return;
+    }
     if (activeOverlay) { //cleanup if another overlay exists
         activeOverlay.remove();
         activeOverlay = null;
-        activeTextArea = null;
     }
     //set active text area and make overlay
     activeOverlay = document.createElement('div');
     activeOverlay.className = 'suggestion-overlay';
     document.body.appendChild(activeOverlay);
-    activeTextArea = textarea;
+    activeInput = textInput;
     //update positioning and styling
-    updateOverlay(textarea);
+    updateOverlay();
 }
 
 const resizeObserver = new ResizeObserver((entries) => {
     for (const entry of entries){
-        if (entry.target === activeTextArea && activeOverlay){
+        if (entry.target === activeInput && activeOverlay){
             updateOverlay();
         }
     }
 });
 
 
-const setupTextArea = (textarea) => {
-
+const setupTextInput = (textInput) => {
+    if (! isInputField(textInput)){
+        return;
+    }
     //event listeners
-    textarea.addEventListener('input', handleStopType); //add listener to handle typing
-    textarea.addEventListener('keydown', handleKeydown); //tab accept
-    textarea.addEventListener('blur', handleBlur); //clear when out of focus
-    textarea.addEventListener('focus', handleFocus); //add overlay when in focus
+    textInput.addEventListener('input', handleStopType); //add listener to handle typing
+    textInput.addEventListener('keydown', handleKeydown); //tab accept
+    textInput.addEventListener('blur', handleBlur); //clear when out of focus
+    textInput.addEventListener('focus', handleFocus); //add overlay when in focus
 
-    resizeObserver.observe(textarea);
+    resizeObserver.observe(textInput);
 }
 
 
 //handle deletion
-const cleanupTextArea = (textarea) => {
-    resizeObserver.unobserve(textarea);
-    if (textarea === activeTextArea && activeOverlay) {
+const cleanupTextInput = (textInput) => {
+    if (! isInputField(textInput)){
+        return;
+    }
+    resizeObserver.unobserve(textInput);
+    if (textInput === activeInput) {
+        cleanupOverlay();
+    }
+    
+    textInput.removeEventListener('input', handleStopType); 
+    textInput.removeEventListener('keydown', handleKeydown); 
+    textInput.removeEventListener('blur', handleBlur); 
+    textInput.removeEventListener('focus', handleFocus); 
+}
+
+const cleanupOverlay = () => {
+    if (activeOverlay) {
         activeOverlay.remove();
         activeOverlay = null;
-        activeTextArea = null;
+        activeInput = null;
     }
 }
 
+
+
 //communicates with background services to autocomplete
 const autocomplete = async (event) => {
-    if (!activeTextArea || !activeOverlay){
+    if (!activeInput || !activeOverlay){
         return;
     }
 
-    const currentText = activeTextArea.value;
+    const currentText = getInputText(activeInput);
     console.log("Current text: ", currentText);  
 
     try {
@@ -182,40 +274,45 @@ const debounce = (callback, wait) => {
 const handleStopType = debounce(autocomplete, 3000);
 
 
-//mutation observer for dynamic textareas
+//mutation observer for dynamic text input
 const mutationObserver = new MutationObserver((mutations) => {
     mutations.forEach(mutation => {
+        //watch removed nodes
         mutation.removedNodes.forEach((node) => {
-            if (node.nodeName === 'TEXTAREA'){ 
-                cleanupTextArea(node);  
+            if (isInputField(node)){ 
+                cleanupTextInput(node);  
             } else if (node.querySelectorAll){ //if node can have elements
-                node.querySelectorAll('textarea').forEach(cleanupTextArea); //cleanup for all textarea elements
+                const textInputs = node.querySelectorAll('textarea, input[type="text"], input[type="search"], [contenteditable="true"]');
+                textInputs.forEach(cleanupTextInput); 
             }
         });
+        //watch added nodes
         mutation.addedNodes.forEach((node) => {
-            if (node.nodeName === 'TEXTAREA'){
-                setupTextArea(node); 
-            } else if (node.querySelectorAll){ //if node can have elements
-                node.querySelectorAll('textarea').forEach(setupTextArea); //setup for all textarea elements
+            if (isInputField(node)){ 
+                setupTextInput(node);   
+            } else if (node.querySelectorAll){ 
+                const textInputs = node.querySelectorAll('textarea, input[type="text"], input[type="search"], [contenteditable="true"]');
+                textInputs.forEach(setupTextInput);
             }
         })
     })
 });
+
+const setupAllInputFields = () => {
+    document.querySelectorAll('textarea, input[type="text"], input[type="search"], [contenteditable="true"]').forEach(setupTextInput);
+}
 
 mutationObserver.observe(document.body, {
     childList: true,
     subtree: true
 });
 
-//add autocomplete to all textareas
-const textareas = document.querySelectorAll('textarea');
-
-let activeOverlay = null;
-let activeTextArea = null;
-
-//setup all textareas 
-textareas.forEach(setupTextArea);
+//setup all text input
+setupAllInputFields();
 
 window.addEventListener('scroll', updateOverlay); //scrolling
 window.addEventListener('resize', updateOverlay); //resizing
 window.visualViewport.addEventListener('scroll', updateOverlay); //zooming
+
+window.addEventListener('load', setupAllInputFields);
+document.addEventListener('DOMContentLoaded', setupAllInputFields);
