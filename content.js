@@ -91,28 +91,29 @@ const updateOverlay = () => {
     activeOverlay.style.fontFamily = computedStyle.fontFamily;
     activeOverlay.style.lineHeight = computedStyle.lineHeight;
     activeOverlay.style.letterSpacing = computedStyle.letterSpacing;
+    activeOverlay.style.textIndent = computedStyle.textIndent;
+    activeOverlay.style.whiteSpace = computedStyle.whiteSpace;
     
-    if (activeInput.nodeName === 'TEXT' || activeInput.nodeName === 'INPUT') { //textarea and input
+    if (activeInput.nodeName === 'TEXTAREA' || activeInput.nodeName === 'INPUT') { //textarea and input
         activeOverlay.style.width = computedStyle.width;
         activeOverlay.style.height = computedStyle.height;
+        
         activeOverlay.style.padding = computedStyle.padding;
+
         activeOverlay.style.border = computedStyle.border;
         activeOverlay.style.boxSizing = computedStyle.boxSizing;
     } else if (activeInput.getAttribute && activeInput.getAttribute('contenteditable') === 'true') { //editable div
         activeOverlay.style.width = `${activeInput.offsetWidth}px`;
         activeOverlay.style.height = `${activeInput.offsetHeight}px`;
-        //add padding if missing
-        if (computedStyle.padding === '0px'){
-            activeOverlay.style.padding = '4px';
-        } else {
-            activeOverlay.style.padding = computedStyle.padding;
-        }
+
+        activeOverlay.style.padding = computedStyle.padding;
     }
     
     //positioning
     const rect = activeInput.getBoundingClientRect();
     activeOverlay.style.top = `${rect.top + window.scrollY}px`;
     activeOverlay.style.left = `${rect.left + window.scrollX}px`;
+
 }
 
 //check for tab to accept
