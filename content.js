@@ -15,7 +15,16 @@ style.textContent = `
     white-space: pre-wrap;
     word-wrap: break-word;
     z-index: 10000;
-}`;
+}
+.suggestion-overlay .suggestion-highlight {
+    color: #888;
+    background-color: #f0f0f0;
+}
+.suggestion-overlay .after-text {
+    color: #000; /* Make text after cursor black instead of gray */
+}
+`;
+
 document.head.appendChild(style);
 
 let activeOverlay = null;
@@ -47,7 +56,7 @@ const getInputText = (element) => {
         console.log('field is textarea or input')
         return element.value;
     } else if (element.getAttribute && element.getAttribute('contenteditable') === 'true'){
-        console.log('field is editable div')
+        console.log('field is editable div');
         return element.textContent;
     }
     console.log('could not get text input')
@@ -68,6 +77,33 @@ const setInputText = (element, text) => {
         element.dispatchEvent(event);
     }
 }
+
+const getCursorPos = (element) => {
+    if (element.nodeName === 'TEXTAREA' || element.nodeName === 'INPUT') {
+        return element.selectionStart; //pos of cursor
+    } else if (element.getAttribute && element.getAttribute('contenteditable') === 'true'){
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0){
+            selectionRange = selection.getRangeAt(0);
+            if (element.contains(selectionRange.startContainer)){
+                return selectionRange.startOffset;
+            }
+        }
+    }
+}
+
+const getTextBeforeCursor = (element) => {
+    const text = getInputText(element);
+    const cursorPos = getCursorPos(element);
+    return text.substring(0,cursorPos);
+}
+
+const getTextAfterCursor = (element) => {
+    const text = getInputText(element);
+    const cursorPos = getCursorPos(element);
+    return text.substring(cursorPos);
+}
+
 
 //create overlay element to show suggestion next to text
 const createOverlay = () => { 
@@ -93,6 +129,8 @@ const updateOverlay = () => {
     activeOverlay.style.letterSpacing = computedStyle.letterSpacing;
     activeOverlay.style.textIndent = computedStyle.textIndent;
     activeOverlay.style.whiteSpace = computedStyle.whiteSpace;
+
+    //activeOverlay.style.backgroundColor = computedStyle.backgroundColor;
     
     if (activeInput.nodeName === 'TEXTAREA' || activeInput.nodeName === 'INPUT') { //textarea and input
         activeOverlay.style.width = computedStyle.width;
@@ -214,14 +252,26 @@ const autocomplete = async (event) => {
         return;
     }
 
-    const currentText = getInputText(activeInput);
+    const textBeforeCursor = getTextBeforeCursor(activeInput);
+    const textAfterCursor = getTextAfterCursor(activeInput); 
+
+    const currentText = textBeforeCursor + textAfterCursor; //getInputText(activeInput);
+    console.log("Text before cursor: ", textBeforeCursor);
+    console.log("Text after cursor: ", textAfterCursor);
     console.log("Current text: ", currentText);  
+
+    if (!textBeforeCursor || textBeforeCursor.trim() === '') {
+        if (activeOverlay) {
+            activeOverlay.textContent = '';
+        }
+        return;
+    }
 
     try {
         console.log("sending request to bg script...");
         const response = await chrome.runtime.sendMessage({ //send message to background
             type: 'GET_COMPLETION',
-            text: currentText
+            text: textBeforeCursor
         });
         
         console.log("received response:", response);
@@ -240,7 +290,12 @@ const autocomplete = async (event) => {
         
         const suggestionText = response.completion;
         if (suggestionText){
-            activeOverlay.textContent = currentText + suggestionText;
+        //    activeOverlay.textContent = currentText + suggestionText;
+            const combinedText = textBeforeCursor + suggestionText + textAfterCursor;
+            activeOverlay.textContent = combinedText;
+
+            highlightSuggestion(textBeforeCursor.length, suggestionText.length);
+
             console.log("Autocomplete suggestion: ", suggestionText);
             console.log("Combined text: ", currentText + suggestionText);
         } else {
@@ -253,6 +308,37 @@ const autocomplete = async (event) => {
         activeOverlay.textContent = '';
     }
 }
+
+const highlightSuggestion = (startPos, length) => {
+    if (!activeOverlay || !activeOverlay.textContent) return;
+    
+    const fullText = activeOverlay.textContent;
+    const textBefore = fullText.substring(0, startPos);
+    const suggestion = fullText.substring(startPos, startPos + length);
+    const textAfter = fullText.substring(startPos + length);
+
+    activeOverlay.innerHTML = '';
+
+    // create span for non-highlighted part before suggestion
+    const beforeSpan = document.createElement('span');
+    beforeSpan.textContent = textBefore;
+
+    // create span for highlighted suggestion
+    const suggestionSpan = document.createElement('span');
+    suggestionSpan.className = 'suggestion-highlight';
+    suggestionSpan.textContent = suggestion;
+
+    // create span for part after suggestion
+    const afterSpan = document.createElement('span');
+    afterSpan.className = 'after-text'; 
+    afterSpan.textContent = textAfter;
+
+    // clear and append spans
+    activeOverlay.appendChild(beforeSpan);
+    activeOverlay.appendChild(suggestionSpan);
+    activeOverlay.appendChild(afterSpan);
+}
+
 
 //debouncer function
 const debounce = (callback, wait) => {
