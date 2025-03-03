@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "AI-Autocomplete-Suggestions",
     "description": "AI autocomplete suggestions when typing",
-    "version": "0.1",
+    "version": "0.2",
     "content_scripts": [
         {
             "matches": ["<all_urls>"],
